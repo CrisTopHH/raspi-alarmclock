@@ -1,3 +1,4 @@
+// Required Libraries
 var app = require('http').createServer(handler),
 	io = require('socket.io').listen(app),
 	url = require('url'),
@@ -5,26 +6,35 @@ var app = require('http').createServer(handler),
 var sys = require('sys');
 var exec = require('child_process').exec;
 
-var red_stat = 0;
-var grn_stat = 0;
-var pressed = 0;
-var active = 1;
+// Global Variables
+
+var red_stat = 0; //Alarm on/off
+var grn_stat = 0; // Radio on/off
+var pressed = 0; // HW Button pressed/not pressed
+var active = 1;  // Watching for alarm-conditions on/off
 var al_days = new Array(0,0,0,0,0,0,0); // Sunday = 0, ... , Sa = 6
 
-var alarm_time = "12:00";
+var alarm_time = "12:00"; // Initial Alarm time
 
+// Start Socket on port 8001
 app.listen(8001);
 
 // GPIO Magic
-// button is attaced to pin 17, red to 22, green to 27
+// --------------------------
+// Pin 17: button
+// Pin 22: Red LED
+// Pin 27: Green LED
+// Pin 23: Audio Amp ( High = 1 = On, Low = 0 = Off)
 var GPIO = require('onoff').Gpio;
 var red = new GPIO(22, 'out');
 var grn = new GPIO(27, 'out');
+var amp = new GPIO (23, 'out');
 var button = new GPIO(17, 'in', 'both', {persistentWatch: true, debounceTimeout: 50});
 
 //Init LEDs to off
 red.writeSync(red_stat);
 grn.writeSync(grn_stat);
+amp.writeSync(0);
 
 //HTTP Handler Function
 function handler (req, res) {
@@ -242,15 +252,22 @@ function puts(error, stdout, stderr){
 // set green LED and radio according to status and send status to all clients
 function set_green(){
 	grn.writeSync(grn_stat);
-	if(grn_stat === 1){exec("mpc play", puts);};
-	if(grn_stat === 0){exec("mpc stop", puts);};
+	if(grn_stat === 1){
+		exec("mpc play", puts);
+		amp.writeSync(1);
+	};
+	if(grn_stat === 0){
+		exec("mpc stop", puts);
+		amp.writeSync(0);
+	};
 	send_status_all();
 	console.log("Green LED set to " + grn_stat);
 };
 
 function set_volume(dir){
-	if(dir === "+"){exec("mpc volume +", puts);};
-	if(dir === "-"){exec("mpc volume -", puts);};
+	if(dir === "+"){exec("mpc volume +1", puts);};
+	if(dir === "-"){exec("mpc volume -1", puts);};
+	if(dir >=1 && dir <= 100 ){exec("mpc volume "+dir, puts);};
 	send_status_all();
 	console.log("Volume adjusted");
 };
